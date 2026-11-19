@@ -203,6 +203,25 @@ dialog::backdrop { background: rgba(10, 15, 30, .55); }
 .troca { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; font-weight: 700; }
 .troca input { width: 24px; height: 24px; accent-color: var(--primaria); }
 
+/* conta */
+.inicial { font-size: 1.3rem; font-weight: 800; color: var(--primaria); line-height: 1; }
+.abas { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--tecla); border-radius: 12px; margin-bottom: 6px; }
+.abas button { min-height: 44px; border: 0; border-radius: 9px; background: none; font-weight: 700; }
+.abas button[aria-selected="true"] { background: var(--cartao); box-shadow: var(--sombra); }
+.dica { font-size: .9rem; color: var(--texto-2); margin: 6px 0; }
+.erro { min-height: 1.4em; margin: 6px 0 0; color: var(--vermelho); font-weight: 700; }
+.ola { font-size: 1.1rem; margin: 4px 0; }
+.btn.link { background: none; color: var(--primaria); padding: 0 8px; margin-right: auto; text-decoration: underline; }
+.btn.link.perigo { color: var(--vermelho); margin: 0 auto; }
+.btn.perigo-cheio { background: var(--vermelho); color: #fff; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.codigo-grande {
+  font: 800 2rem/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .12em; text-align: center;
+  padding: 12px; margin: 10px 0 4px; border: 2px dashed var(--primaria); border-radius: 14px; user-select: all;
+}
+.centro-acoes { justify-content: center; margin-top: 6px; }
+.troca span { flex: 1; }
+
 .legenda { display: grid; gap: 8px; margin-top: 8px; }
 .legenda div { display: flex; align-items: center; gap: 10px; }
 .legenda .casa { --t: 36px; font-size: 1.1rem; }

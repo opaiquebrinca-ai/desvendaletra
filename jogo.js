@@ -33,10 +33,34 @@ const cfg = Object.assign(
   { nivel: "facil", tamanho: 5, simbolos: true, nome1: "Jogador 1", nome2: "Jogador 2" },
   guarda.ler("cfg", {})
 );
-const stats = Object.assign(
-  { I: { jogos: 0, vitorias: 0, seq: 0, melhor: 0, dist: {} }, D: { partidas: 0, empates: 0, vitorias: {} } },
-  guarda.ler("stats", {})
-);
+// Estatísticas: sem conta ficam em "stats" (deste aparelho); com conta, em "stats-conta" + nuvem.
+const statsVazias = () => ({ I: { jogos: 0, vitorias: 0, seq: 0, melhor: 0, dist: {} }, D: { partidas: 0, empates: 0, vitorias: {} } });
+const stats = statsVazias();
+function aplicarStats(dados) {
+  const base = statsVazias();
+  stats.I = Object.assign(base.I, dados?.I || {});
+  stats.D = Object.assign(base.D, dados?.D || {});
+}
+const chaveStats = () => (NUVEM.logado ? "stats-conta" : "stats");
+aplicarStats(guarda.ler(chaveStats(), {}));
+
+function salvarStats() {
+  guarda.gravar(chaveStats(), stats);
+  if (NUVEM.logado) NUVEM.enviarStats(stats).catch(() => { /* fica pendente; vai na próxima abertura */ });
+}
+
+// Ao entrar na conta: se a nuvem já tem estatísticas, elas valem; se não, as deste aparelho viram as da conta.
+async function sincronizarStats() {
+  if (!NUVEM.logado) return;
+  if (NUVEM.pendente) { // jogou sem internet: o aparelho está mais novo que a nuvem
+    await NUVEM.enviarStats(stats).catch(() => {});
+    return;
+  }
+  const remotas = await NUVEM.baixarStats();
+  if (remotas) aplicarStats(remotas);
+  else { aplicarStats(guarda.ler("stats", {})); await NUVEM.enviarStats(stats); }
+  guarda.gravar("stats-conta", stats);
+}
 
 let J = null; // partida atual
 
@@ -74,7 +98,7 @@ function novaPartida(modo = J?.modo || "I") {
 function salvarPartida() { guarda.gravar("partida", J); }
 
 const jogadorDaVez = () => J.jogadores[J.vez];
-const nomeDe = i => (i === 0 ? cfg.nome1 : cfg.nome2) || `Jogador ${i + 1}`;
+const nomeDe = i => (i === 0 ? NUVEM.apelido || cfg.nome1 : cfg.nome2) || `Jogador ${i + 1}`;
 const esgotou = j => j.tentativas.length >= J.max;
 
 /* ---------- desenho ---------- */
@@ -245,7 +269,7 @@ function encerrar(r) {
     if (r.empate) s.empates++;
     else { const nome = nomeDe(r.vencedor); s.vitorias[nome] = (s.vitorias[nome] || 0) + 1; }
   }
-  guarda.gravar("stats", stats);
+  salvarStats();
   salvarPartida();
   desenhar();
   setTimeout(() => {
@@ -340,7 +364,12 @@ function abrirDialogo(titulo, corpo) {
   $("#dlg-corpo").innerHTML = corpo;
   if (!dlg.open) dlg.showModal();
 }
+// a tela do código de recuperação só fecha pelo "Continuar" (depois de marcar "Já anotei")
+dlg.addEventListener("cancel", e => { if (dlg.dataset.travado) e.preventDefault(); });
 dlg.addEventListener("click", e => {
+  if (dlg.dataset.travado && (e.target === dlg || e.target.closest("[data-fechar]"))) {
+    return aviso("Marque “Já anotei” e toque em Continuar");
+  }
   if (e.target === dlg || e.target.closest("[data-fechar]")) return dlg.close();
   const acao = e.target.closest("[data-acao]")?.dataset.acao;
   if (acao === "nova") { dlg.close(); novaPartida(); }
@@ -422,18 +451,171 @@ function abrirConfig() {
   });
 }
 
-function abrirConta() {
+/* ---------- conta (apelido + senha, sem e-mail) ---------- */
+function atualizarBotaoConta() {
+  const b = $("#btn-conta");
+  if (NUVEM.logado) {
+    b.innerHTML = `<span class="inicial">${esc(NUVEM.apelido[0].toUpperCase())}</span>`;
+    b.setAttribute("aria-label", `Minha conta: ${NUVEM.apelido}`);
+  } else {
+    b.innerHTML = `<svg class="ic"><use href="#i-user"/></svg>`;
+    b.setAttribute("aria-label", "Minha conta");
+  }
+}
+
+// Liga um formulário de conta: mostra "Aguarde…", trava o botão e escreve o erro perto dele.
+function formConta(idBotao, acao) {
+  const btn = $(idBotao), msg = $("#c-erro");
+  const rodar = async () => {
+    msg.textContent = "";
+    const rotulo = btn.textContent;
+    btn.disabled = true; btn.textContent = "Aguarde…";
+    try { await acao(); }
+    catch (e) { msg.textContent = e.message; btn.disabled = false; btn.textContent = rotulo; }
+  };
+  btn.addEventListener("click", rodar);
+  $("#dlg-corpo").querySelectorAll("input").forEach(i =>
+    i.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); rodar(); } }));
+}
+
+const campoApelido = (v = "") => `<label class="campo">Apelido
+  <input id="c-ap" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(v)}"></label>`;
+const campoSenha = (id, rotulo, novo) => `<label class="campo">${rotulo}
+  <input id="${id}" type="password" maxlength="72" autocomplete="${novo ? "new-password" : "current-password"}"></label>`;
+
+function abrirConta(aba = "entrar") {
+  if (NUVEM.logado) return telaContaLogado();
+  const criar = aba === "criar";
   abrirDialogo("Minha conta", `
-    <p class="centro">Por enquanto os dados ficam só neste aparelho.</p>
-    <label class="campo">Seu nome<input id="c-n1" maxlength="16" value="${esc(cfg.nome1)}"></label>
+    <div class="abas" role="tablist">
+      <button role="tab" aria-selected="${!criar}" data-aba="entrar">Entrar</button>
+      <button role="tab" aria-selected="${criar}" data-aba="criar">Criar conta</button>
+    </div>
+    ${campoApelido()}
+    ${campoSenha("c-senha", "Senha", criar)}
+    ${criar ? campoSenha("c-senha2", "Repita a senha", true) +
+      `<p class="dica">Use um apelido, não o seu nome completo. Só pedimos apelido e senha.</p>` : ""}
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes">
+      ${criar ? "" : `<button class="btn link" id="c-esqueci">Esqueci a senha</button>`}
+      <button class="btn" id="c-ok">${criar ? "Criar conta" : "Entrar"}</button>
+    </div>`);
+  $("#dlg-corpo").querySelectorAll("[data-aba]").forEach(b =>
+    b.addEventListener("click", () => abrirConta(b.dataset.aba)));
+  $("#c-esqueci")?.addEventListener("click", telaRecuperar);
+  $("#c-ap").focus();
+  formConta("#c-ok", async () => {
+    const ap = $("#c-ap").value.trim(), senha = $("#c-senha").value;
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(ap)) throw new Error("O apelido precisa ter de 3 a 16 caracteres: letras, números ou _");
+    if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres");
+    if (criar) {
+      if (senha !== $("#c-senha2").value) throw new Error("As duas senhas estão diferentes");
+      const codigo = await NUVEM.cadastrar(ap, senha);
+      await depoisDeEntrar();
+      telaCodigo(codigo, "Conta criada!");
+    } else {
+      await NUVEM.entrar(ap, senha);
+      await depoisDeEntrar();
+      dlg.close();
+      aviso(`Oi, ${NUVEM.apelido}!`);
+    }
+  });
+}
+
+async function depoisDeEntrar() {
+  atualizarBotaoConta();
+  await sincronizarStats().catch(() => {});
+  if (J && !J.fim) desenhar();
+}
+
+function telaRecuperar() {
+  abrirDialogo("Recuperar a conta", `
+    <p>Use o código de recuperação que apareceu quando você criou a conta.</p>
+    ${campoApelido()}
+    <label class="campo">Código de recuperação
+      <input id="c-cod" maxlength="9" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH"></label>
+    ${campoSenha("c-senha", "Senha nova", true)}
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes">
+      <button class="btn sec" id="c-voltar">Voltar</button>
+      <button class="btn" id="c-ok">Trocar senha</button>
+    </div>`);
+  $("#c-voltar").addEventListener("click", () => abrirConta("entrar"));
+  $("#c-ap").focus();
+  formConta("#c-ok", async () => {
+    const ap = $("#c-ap").value.trim(), cod = $("#c-cod").value.trim(), senha = $("#c-senha").value;
+    if (!ap || !cod) throw new Error("Preencha o apelido e o código");
+    if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres");
+    const novo = await NUVEM.recuperar(ap, cod, senha);
+    await depoisDeEntrar();
+    telaCodigo(novo, "Senha trocada!", "O código antigo não vale mais. Anote este novo:");
+  });
+}
+
+// Mostra o código de recuperação uma única vez; só deixa seguir depois de marcar "Já anotei".
+function telaCodigo(codigo, titulo, texto = "Este é o seu código de recuperação. Ele é o único jeito de recuperar a conta se você esquecer a senha.") {
+  abrirDialogo(titulo, `
+    <p>${texto}</p>
+    <p class="codigo-grande" id="c-codigo">${esc(codigo)}</p>
+    <p class="dica centro">Anote num papel ou tire um print desta tela.</p>
+    <div class="acoes centro-acoes"><button class="btn sec" id="c-copiar">Copiar código</button></div>
+    <label class="troca"><span>Já anotei o meu código</span><input type="checkbox" id="c-anotei"></label>
+    <div class="acoes"><button class="btn" id="c-continuar" disabled>Continuar</button></div>`);
+  dlg.dataset.travado = "1"; // não fecha clicando fora antes de anotar
+  $("#c-copiar").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(codigo); aviso("Código copiado"); }
+    catch { aviso("Não deu para copiar. Anote o código."); }
+  });
+  $("#c-anotei").addEventListener("change", e => { $("#c-continuar").disabled = !e.target.checked; });
+  $("#c-continuar").addEventListener("click", () => { delete dlg.dataset.travado; dlg.close(); });
+}
+
+function telaContaLogado() {
+  const status = NUVEM.pendente
+    ? "Estatísticas esperando internet para subir."
+    : "Suas estatísticas ficam salvas na conta.";
+  abrirDialogo("Minha conta", `
+    <p class="ola">Você entrou como <b>${esc(NUVEM.apelido)}</b></p>
+    <p class="dica">${status}</p>
     <label class="campo">Nome do 2º jogador (Dupla)<input id="c-n2" maxlength="16" value="${esc(cfg.nome2)}"></label>
-    <div class="acoes"><button class="btn" id="c-salvar">Salvar</button></div>`);
-  $("#c-salvar").addEventListener("click", () => {
-    cfg.nome1 = $("#c-n1").value.trim() || "Jogador 1";
-    cfg.nome2 = $("#c-n2").value.trim() || "Jogador 2";
-    guarda.gravar("cfg", cfg);
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes">
+      <button class="btn sec" id="c-codigo-novo">Novo código de recuperação</button>
+      <button class="btn sec" id="c-sair">Sair</button>
+    </div>
+    <div class="acoes"><button class="btn link perigo" id="c-apagar">Apagar minha conta</button></div>`);
+  $("#c-n2").addEventListener("change", e => {
+    cfg.nome2 = e.target.value.trim() || "Jogador 2"; guarda.gravar("cfg", cfg);
+  });
+  formConta("#c-codigo-novo", async () => telaCodigo(await NUVEM.novoCodigo(), "Novo código", "O código anterior não vale mais. Anote este:"));
+  $("#c-sair").addEventListener("click", () => {
+    NUVEM.sair();
+    aplicarStats(guarda.ler("stats", {}));
+    atualizarBotaoConta();
     dlg.close();
-    if (!J.fim || J.modo === "D") desenhar();
+    if (J && !J.fim) desenhar();
+    aviso("Você saiu da conta");
+  });
+  $("#c-apagar").addEventListener("click", telaApagar);
+}
+
+function telaApagar() {
+  abrirDialogo("Apagar a conta?", `
+    <p>A conta <b>${esc(NUVEM.apelido)}</b> e todas as estatísticas dela serão apagadas para sempre. Não dá para desfazer.</p>
+    <label class="campo">Para confirmar, digite o seu apelido<input id="c-conf" maxlength="16" autocomplete="off" autocapitalize="off"></label>
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes">
+      <button class="btn sec" id="c-voltar">Voltar</button>
+      <button class="btn perigo-cheio" id="c-ok">Apagar para sempre</button>
+    </div>`);
+  $("#c-voltar").addEventListener("click", telaContaLogado);
+  formConta("#c-ok", async () => {
+    if ($("#c-conf").value.trim().toLowerCase() !== NUVEM.apelido.toLowerCase()) throw new Error("O apelido digitado não confere");
+    await NUVEM.apagarConta();
+    aplicarStats(guarda.ler("stats", {}));
+    atualizarBotaoConta();
+    dlg.close();
+    aviso("Conta apagada");
   });
 }
 
@@ -463,10 +645,12 @@ document.querySelector(".barra").addEventListener("click", e => {
   if (nav === "stats") return abrirStats();
   if (nav === "config") return abrirConfig();
 });
-$("#btn-conta").addEventListener("click", abrirConta);
+$("#btn-conta").addEventListener("click", () => abrirConta());
 
 /* ---------- início ---------- */
 (function iniciar() {
+  atualizarBotaoConta();
+  sincronizarStats().catch(() => { /* sem internet: segue com o que está no aparelho */ });
   const salva = guarda.ler("partida", null);
   if (salva && salva.segredo && BANCO[salva.tamanho]?.has(salva.segredo) && !salva.fim) {
     J = salva;
