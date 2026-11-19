@@ -531,10 +531,42 @@ function formConta(idBotao, acao) {
     i.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); rodar(); } }));
 }
 
+const DICA_APELIDO = "Sem espaços: use letras, números ou _ (ex.: Thomas_10)";
 const campoApelido = (v = "") => `<label class="campo">Apelido
-  <input id="c-ap" maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(v)}"></label>`;
-const campoSenha = (id, rotulo, novo) => `<label class="campo">${rotulo}
-  <input id="${id}" type="password" maxlength="72" autocomplete="${novo ? "new-password" : "current-password"}"></label>`;
+  <input id="c-ap" maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false"
+    aria-describedby="c-ap-dica" value="${esc(v)}"></label>
+  <p class="dica-campo" id="c-ap-dica">${DICA_APELIDO}</p>`;
+const campoSenha = (id, rotulo, novo) => `<label class="campo" for="${id}">${rotulo}</label>
+  <div class="senha-caixa">
+    <input id="${id}" type="password" maxlength="72" autocomplete="${novo ? "new-password" : "current-password"}">
+    <button type="button" class="ver-senha" data-ver="${id}" aria-label="Mostrar senha" aria-pressed="false">
+      <svg class="ic"><use href="#i-olho"/></svg></button>
+  </div>`;
+
+// Valida o apelido antes de mandar: o espaço ganha uma mensagem própria.
+function conferirApelido(ap) {
+  if (/\s/.test(ap)) throw new Error("O apelido não pode ter espaço. Use _ no lugar (ex.: Thomas_10)");
+  if (!/^[A-Za-z0-9_]{3,24}$/.test(ap)) throw new Error("O apelido precisa ter de 3 a 24 caracteres: letras, números ou _");
+}
+
+// Liga os detalhes dos campos de conta: aviso ao digitar espaço e o olho que mostra/esconde a senha.
+function ligarCamposConta() {
+  const ap = $("#c-ap"), dica = $("#c-ap-dica");
+  ap?.addEventListener("input", () => {
+    const temEspaco = /\s/.test(ap.value);
+    dica.textContent = temEspaco ? "O apelido não pode ter espaço. Use _ no lugar." : DICA_APELIDO;
+    dica.classList.toggle("alerta", temEspaco);
+  });
+  $("#dlg-corpo").querySelectorAll("[data-ver]").forEach(b => b.addEventListener("click", () => {
+    const campo = $("#" + b.dataset.ver);
+    const mostrar = campo.type === "password";
+    campo.type = mostrar ? "text" : "password";
+    b.setAttribute("aria-pressed", String(mostrar));
+    b.setAttribute("aria-label", mostrar ? "Esconder senha" : "Mostrar senha");
+    b.innerHTML = `<svg class="ic"><use href="#${mostrar ? "i-olho-off" : "i-olho"}"/></svg>`;
+    campo.focus();
+  }));
+}
 
 function abrirConta(aba = "entrar") {
   if (NUVEM.logado) return telaContaLogado();
@@ -556,10 +588,11 @@ function abrirConta(aba = "entrar") {
   $("#dlg-corpo").querySelectorAll("[data-aba]").forEach(b =>
     b.addEventListener("click", () => abrirConta(b.dataset.aba)));
   $("#c-esqueci")?.addEventListener("click", telaRecuperar);
+  ligarCamposConta();
   $("#c-ap").focus();
   formConta("#c-ok", async () => {
     const ap = $("#c-ap").value.trim(), senha = $("#c-senha").value;
-    if (!/^[A-Za-z0-9_]{3,24}$/.test(ap)) throw new Error("O apelido precisa ter de 3 a 24 caracteres: letras, números ou _");
+    conferirApelido(ap);
     if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres");
     if (criar) {
       if (senha !== $("#c-senha2").value) throw new Error("As duas senhas estão diferentes");
@@ -594,10 +627,12 @@ function telaRecuperar() {
       <button class="btn" id="c-ok">Trocar senha</button>
     </div>`);
   $("#c-voltar").addEventListener("click", () => abrirConta("entrar"));
+  ligarCamposConta();
   $("#c-ap").focus();
   formConta("#c-ok", async () => {
     const ap = $("#c-ap").value.trim(), cod = $("#c-cod").value.trim(), senha = $("#c-senha").value;
     if (!ap || !cod) throw new Error("Preencha o apelido e o código");
+    conferirApelido(ap);
     if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres");
     const novo = await NUVEM.recuperar(ap, cod, senha);
     await depoisDeEntrar();
