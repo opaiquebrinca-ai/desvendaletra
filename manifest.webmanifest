@@ -1,6 +1,6 @@
 {
-  "name": "Jogo do Thomas",
-  "short_name": "Jogo Thomas",
+  "name": "DesvendaLetra",
+  "short_name": "DesvendaLetra",
   "description": "Jogo de adivinhar palavras",
   "lang": "pt-BR",
   "start_url": "./",
