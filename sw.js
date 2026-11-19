@@ -1,7 +1,8 @@
 // Guarda os arquivos do jogo para funcionar sem internet.
 // Ao mudar qualquer arquivo, troque a versão abaixo para o aparelho baixar de novo.
-const VERSAO = "jogo-thomas-v1";
-const ARQUIVOS = ["./", "index.html", "estilo.css", "jogo.js", "palavras.js", "manifest.webmanifest", "icone.svg"];
+const VERSAO = "jogo-thomas-v2";
+const ARQUIVOS = ["./", "index.html", "estilo.css", "jogo.js", "palavras.js", "manifest.webmanifest",
+  "icone.svg", "icone-192.png", "icone-512.png", "icone-180.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting()));

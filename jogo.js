@@ -248,7 +248,10 @@ function encerrar(r) {
   guarda.gravar("stats", stats);
   salvarPartida();
   desenhar();
-  setTimeout(mostrarFim, 300);
+  setTimeout(() => {
+    mostrarFim();
+    if (r.venceu || r.vencedor !== undefined) soltarConfetes(); // depois da janela, para ficar por cima
+  }, 300);
 }
 
 function mostrarFim() {
@@ -270,6 +273,64 @@ function mostrarFim() {
       <button class="btn sec" data-acao="stats">Estatísticas</button>
       <button class="btn" data-acao="nova">Jogar de novo</button>
     </div>`);
+}
+
+/* ---------- confetes (desenho do Thomas: todas as cores, saindo de baixo e abrindo em leque) ---------- */
+const CORES_CONFETE = ["#E53935", "#FB8C00", "#FDD835", "#43A047", "#1E88E5", "#3949AB", "#8E24AA", "#EC407A"];
+function soltarConfetes() {
+  // quem pediu menos animação no aparelho recebe uma chuva menor e mais curta
+  const calmo = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cv = $("#confete");
+  try { if (cv.matches(":popover-open")) cv.hidePopover(); cv.showPopover(); } catch { /* navegador sem popover */ }
+  const ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pecas = [];
+  const rajada = (qtd) => {
+    for (let i = 0; i < qtd; i++) {
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; // leque para cima
+      const vel = Math.sqrt(H) * (0.68 + Math.random() * 0.3); // pico entre ~45% e ~95% da altura
+      pecas.push({
+        x: W / 2 + (Math.random() - 0.5) * 30, y: H + 10,
+        vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel,
+        w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+        rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+        cor: CORES_CONFETE[i % CORES_CONFETE.length], fase: Math.random() * 6,
+      });
+    }
+  };
+  rajada(calmo ? 60 : 140);
+  if (!calmo) setTimeout(() => rajada(90), 350);
+  const DURA = calmo ? 2200 : 4500;
+  const inicio = performance.now();
+  const PASSO = 1000 / 60; // a física anda em passos de 60 Hz, qualquer que seja a tela (60, 90, 120 Hz)
+  let simulado = 0;
+  (function quadro(t) {
+    const idade = t - inicio;
+    let passos = 0;
+    while (simulado + PASSO <= idade && passos < 240) {
+      simulado += PASSO; passos++;
+      for (const p of pecas) {
+        p.vy += 0.32; p.vx *= 0.985; p.vy *= 0.99;
+        if (p.vy > 2.2) p.vy = 2.2; // depois do pico, desce flutuando
+        p.x += p.vx + Math.sin((simulado / 300) + p.fase) * 0.6; p.y += p.vy; p.rot += p.vr;
+      }
+    }
+    ctx.clearRect(0, 0, W, H);
+    for (const p of pecas) {
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.scale(1, Math.abs(Math.cos(p.rot * 2)) * 0.8 + 0.2); // efeito de girar no ar
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, idade - (DURA - 800)) / 800);
+      ctx.fillStyle = p.cor;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (idade < DURA) requestAnimationFrame(quadro);
+    else { ctx.clearRect(0, 0, W, H); try { cv.hidePopover(); } catch { /* idem */ } }
+  })(inicio);
 }
 
 /* ---------- diálogos ---------- */

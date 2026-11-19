@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2457D6">
+<meta name="theme-color" content="#7FA4E8">
 <title>Jogo do Thomas</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icone.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icone.svg">
+<link rel="apple-touch-icon" href="icone-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
@@ -59,6 +59,9 @@
   <p class="tr-dica">Não espie as tentativas do outro!</p>
   <button class="btn grande" id="tr-ok">Estou pronto</button>
 </div>
+
+<!-- popover: fica acima até da janela de fim de jogo -->
+<canvas id="confete" popover="manual" aria-hidden="true"></canvas>
 
 <dialog id="dlg" aria-labelledby="dlg-titulo">
   <div class="dlg-cab">

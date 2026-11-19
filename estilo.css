@@ -15,6 +15,11 @@
   --sombra: 0 2px 0 rgba(15, 23, 42, .12);
   --raio: 12px;
   --fonte: "Baloo 2", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  /* fundo do jogo (desenho do Thomas): faixas diagonais azul, roxo e rosa, sem falhas */
+  --ceu: linear-gradient(to bottom left,
+    #9C7FD6 0%, #D7A6E0 14%, #B9D3F2 30%, #7FA4E8 44%, #A98AD8 58%,
+    #E0A9D9 70%, #B5A3E6 80%, #8FB4EE 90%, #5F86D9 100%);
+  --vidro: rgba(255, 255, 255, .82);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,6 +28,10 @@
     --borda: #34405A; --borda-ativa: #8A97B0; --tecla: #2A3450;
     --primaria: #4C7DF0; --azul: #3D6FE6; --laranja: #E8590C; --vermelho: #C9302C;
     --sombra: 0 2px 0 rgba(0, 0, 0, .4);
+    --ceu: linear-gradient(to bottom left,
+      #3B2A6B 0%, #5A3570 14%, #24406E 30%, #1E3263 44%, #3A2D6E 58%,
+      #5B2F66 70%, #33306E 80%, #22406F 90%, #182B5C 100%);
+    --vidro: rgba(24, 32, 54, .82);
     color-scheme: dark;
   }
 }
@@ -31,6 +40,9 @@
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--fundo);
+  background: var(--ceu) fixed;
+  background-size: 100% 100%;
+  min-height: 100dvh;
   color: var(--texto);
   font-family: var(--fonte);
   -webkit-tap-highlight-color: transparent;
@@ -62,12 +74,14 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
 }
 
 .status {
-  display: flex; align-items: center; gap: 8px; padding: 6px 16px 0;
+  display: flex; align-items: center; gap: 8px; margin: 8px 16px 0; padding: 4px 10px 4px 4px;
   font-size: .95rem; color: var(--texto-2); font-weight: 500;
+  background: var(--vidro); border-radius: 99px;
 }
 .chip { background: var(--primaria); color: var(--sobre-primaria); border-radius: 99px; padding: 0 10px; font-weight: 700; }
 .st-tent { margin-left: auto; font-weight: 700; color: var(--texto); }
-.vez { margin: 6px 16px 0; text-align: center; font-weight: 700; font-size: 1.05rem; }
+.vez { margin: 6px auto 0; padding: 0 14px; text-align: center; font-weight: 700; font-size: 1.05rem; background: var(--vidro); border-radius: 99px; }
+.vez[hidden] { display: none; }
 
 /* tabuleiro */
 .tabuleiro {
@@ -149,6 +163,11 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
 .tr-nome { margin: 0 0 8px; font-size: 2.6rem; font-weight: 800; }
 .tr-dica { margin: 0 0 24px; opacity: .85; }
 .transicao .btn { background: #fff; color: var(--primaria); }
+
+#confete {
+  position: fixed; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+  background: transparent; pointer-events: none; z-index: 60; overflow: visible;
+}
 
 /* botões e diálogos */
 .btn {
