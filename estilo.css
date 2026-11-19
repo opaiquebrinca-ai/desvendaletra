@@ -151,6 +151,11 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
 .barra button[aria-current="true"] { background: var(--primaria); color: var(--sobre-primaria); }
 .barra button[aria-current="true"] small { color: inherit; }
 .barra .em-breve { opacity: .5; }
+.barra { margin-bottom: 2px; }
+.credito {
+  margin: 0 0 4px; text-align: center; font-size: .68rem; font-weight: 600; letter-spacing: .02em;
+  color: rgba(255, 255, 255, .92); text-shadow: 0 1px 2px rgba(30, 25, 70, .55); user-select: none;
+}
 
 /* transição da Dupla */
 .transicao {
@@ -232,6 +237,10 @@ dialog::backdrop { background: rgba(10, 15, 30, .55); }
 .dist { display: grid; gap: 4px; }
 .dist div { display: grid; grid-template-columns: 2.2em 1fr; align-items: center; gap: 6px; font-weight: 700; font-size: .9rem; }
 .dist i { display: block; height: 22px; min-width: 22px; background: var(--azul); color: #fff; border-radius: 6px; font-style: normal; text-align: right; padding: 0 6px; }
+.numeros-2 { grid-template-columns: 1fr 1fr; }
+.pontos { margin: 8px 0 0; text-align: center; font-size: 2rem; font-weight: 800; color: var(--primaria); line-height: 1.1; }
+.conta-pontos { margin: 2px 0 0; text-align: center; font-size: .85rem; color: var(--texto-2); }
+.recorde { margin: 6px auto 0; width: fit-content; padding: 0 12px; border-radius: 99px; background: #FDD835; color: #3B2A00; font-weight: 800; }
 .fim-palavra { display: flex; justify-content: center; gap: 6px; margin: 10px 0; }
 .fim-palavra .casa { --t: 44px; }
 .centro { text-align: center; color: var(--texto-2); }

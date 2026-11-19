@@ -1,11 +1,23 @@
 "use strict";
 
 const NIVEIS = {
-  facil:   { nome: "Fácil",   tentativas: 20 },
-  medio:   { nome: "Médio",   tentativas: 15 },
-  dificil: { nome: "Difícil", tentativas: 10 },
+  facil:   { nome: "Fácil",   tentativas: 20, mult: 1 },
+  medio:   { nome: "Médio",   tentativas: 15, mult: 1.5 },
+  dificil: { nome: "Difícil", tentativas: 10, mult: 2 },
 };
 const TAMANHOS = [4, 5, 6, 7];
+
+/* ---------- pontuação: base pelo tamanho × nível × bônus de sequência ---------- */
+const BASE_PONTOS = { 4: 100, 5: 150, 6: 220, 7: 300 };
+const BONUS_SEQ_POR_VITORIA = 0.1, BONUS_SEQ_MAX = 0.5; // +10% por vitória seguida, até +50%
+// seq = sequência já contando esta vitória (1 = primeira vitória seguida, sem bônus)
+function calcularPontos(tamanho, nivel, seq = 1) {
+  const base = BASE_PONTOS[tamanho] || 0;
+  const mult = NIVEIS[nivel].mult;
+  const bonus = Math.min(Math.max(seq - 1, 0) * BONUS_SEQ_POR_VITORIA, BONUS_SEQ_MAX);
+  return { base, mult, bonus, total: Math.round(base * mult * (1 + bonus)) };
+}
+const numBR = n => n.toLocaleString("pt-BR");
 const MODOS = { I: "Individual", D: "Dupla" };
 
 const sem_acento = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
@@ -34,7 +46,10 @@ const cfg = Object.assign(
   guarda.ler("cfg", {})
 );
 // Estatísticas: sem conta ficam em "stats" (deste aparelho); com conta, em "stats-conta" + nuvem.
-const statsVazias = () => ({ I: { jogos: 0, vitorias: 0, seq: 0, melhor: 0, dist: {} }, D: { partidas: 0, empates: 0, vitorias: {} } });
+const statsVazias = () => ({
+  I: { jogos: 0, vitorias: 0, seq: 0, melhor: 0, dist: {}, pontos: 0, recorde: 0 },
+  D: { partidas: 0, empates: 0, vitorias: {}, pontos: {} },
+});
 const stats = statsVazias();
 function aplicarStats(dados) {
   const base = statsVazias();
@@ -261,13 +276,24 @@ function encerrar(r) {
   if (J.modo === "I") {
     const s = stats.I;
     s.jogos++;
-    if (r.venceu) { s.vitorias++; s.seq++; s.melhor = Math.max(s.melhor, s.seq); s.dist[n] = (s.dist[n] || 0) + 1; }
-    else s.seq = 0;
+    if (r.venceu) {
+      s.vitorias++; s.seq++; s.melhor = Math.max(s.melhor, s.seq); s.dist[n] = (s.dist[n] || 0) + 1;
+      r.pontos = calcularPontos(J.tamanho, J.nivel, s.seq);
+      s.pontos += r.pontos.total;
+      r.recorde = r.pontos.total > s.recorde;
+      s.recorde = Math.max(s.recorde, r.pontos.total);
+    } else s.seq = 0; // perder não tira pontos, só zera a sequência
   } else {
     const s = stats.D;
     s.partidas++;
     if (r.empate) s.empates++;
-    else { const nome = nomeDe(r.vencedor); s.vitorias[nome] = (s.vitorias[nome] || 0) + 1; }
+    else {
+      // na Dupla só quem vence pontua, sem bônus de sequência
+      const nome = nomeDe(r.vencedor);
+      s.vitorias[nome] = (s.vitorias[nome] || 0) + 1;
+      r.pontos = calcularPontos(J.tamanho, J.nivel, 1);
+      s.pontos[nome] = (s.pontos[nome] || 0) + r.pontos.total;
+    }
   }
   salvarStats();
   salvarPartida();
@@ -291,12 +317,31 @@ function mostrarFim() {
     titulo = `${nomeDe(r.vencedor)} venceu!`;
     texto = `Acertou na ${J.jogadores[r.vencedor].tentativas.length}ª tentativa.`;
   }
+  const p = r.pontos;
+  const blocoPontos = p ? `
+    <p class="pontos" aria-live="polite">+<span id="fim-pontos" data-alvo="${p.total}">${numBR(p.total)}</span> pontos</p>
+    <p class="conta-pontos">${J.tamanho} letras (${p.base}) × ${NIVEIS[J.nivel].nome} (×${numBR(p.mult)})${
+      p.bonus ? ` × sequência de ${stats.I.seq} (+${Math.round(p.bonus * 100)}%)` : ""}</p>
+    ${r.recorde ? `<p class="recorde">Novo recorde!</p>` : ""}` : "";
   abrirDialogo(titulo, `
-    <p class="centro">${texto}</p>${palavraHTML()}
+    <p class="centro">${texto}</p>${palavraHTML()}${blocoPontos}
     <div class="acoes">
       <button class="btn sec" data-acao="stats">Estatísticas</button>
       <button class="btn" data-acao="nova">Jogar de novo</button>
     </div>`);
+  contarPontos();
+}
+
+// os pontos sobem de 0 até o total, junto com os confetes
+function contarPontos() {
+  const el = $("#fim-pontos");
+  if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const alvo = Number(el.dataset.alvo), inicio = performance.now(), DURA = 1100;
+  (function passo(t) {
+    const f = Math.min(1, (t - inicio) / DURA);
+    el.textContent = numBR(Math.round(alvo * (1 - Math.pow(1 - f, 3))));
+    if (f < 1 && el.isConnected) requestAnimationFrame(passo);
+  })(inicio);
 }
 
 /* ---------- confetes (desenho do Thomas: todas as cores, saindo de baixo e abrindo em leque) ---------- */
@@ -405,10 +450,14 @@ function abrirStats() {
     .map(k => `<div><span>${k}</span><i style="width:${Math.round(100 * s.dist[k] / maxDist)}%">${s.dist[k]}</i></div>`).join("")
     || `<p class="centro">Ainda sem vitórias.</p>`;
   const d = stats.D;
-  const placar = Object.entries(d.vitorias).sort((a, b) => b[1] - a[1])
-    .map(([n, v]) => `<div class="troca"><span>${esc(n)}</span><span>${v}</span></div>`).join("");
+  const placar = Object.entries(d.vitorias).sort((a, b) => (d.pontos[b[0]] || 0) - (d.pontos[a[0]] || 0) || b[1] - a[1])
+    .map(([n, v]) => `<div class="troca"><span>${esc(n)}</span><span>${v} ${v === 1 ? "vitória" : "vitórias"} · ${numBR(d.pontos[n] || 0)} pts</span></div>`).join("");
   abrirDialogo("Estatísticas", `
     <div class="grupo">Individual</div>
+    <div class="numeros numeros-2">
+      <div><b>${numBR(s.pontos)}</b><span>pontos</span></div>
+      <div><b>${numBR(s.recorde)}</b><span>recorde numa partida</span></div>
+    </div>
     <div class="numeros">
       <div><b>${s.jogos}</b><span>jogos</span></div>
       <div><b>${pct}%</b><span>vitórias</span></div>
@@ -437,6 +486,10 @@ function abrirConfig() {
       <div>${casaHTML("B", "p", 0)} Tem na palavra, em outro lugar</div>
       <div>${casaHTML("C", "a", 0)} Não tem na palavra</div>
     </div>
+    <div class="grupo">Pontos por vitória</div>
+    <p class="dica">${TAMANHOS.map(t => `${t} letras: ${BASE_PONTOS[t]}`).join(" · ")}<br>
+      × nível: Fácil ×1 · Médio ×1,5 · Difícil ×2<br>
+      + 10% por vitória seguida (até +50%). Perder não tira pontos.</p>
     <p class="centro" style="margin-top:14px">Dificuldade e letras valem a partir da próxima partida.</p>
     <div class="acoes"><button class="btn" data-acao="nova">Nova partida</button></div>`);
   $("#dlg-corpo").querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => {
