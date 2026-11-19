@@ -532,7 +532,7 @@ function formConta(idBotao, acao) {
 }
 
 const campoApelido = (v = "") => `<label class="campo">Apelido
-  <input id="c-ap" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(v)}"></label>`;
+  <input id="c-ap" maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(v)}"></label>`;
 const campoSenha = (id, rotulo, novo) => `<label class="campo">${rotulo}
   <input id="${id}" type="password" maxlength="72" autocomplete="${novo ? "new-password" : "current-password"}"></label>`;
 
@@ -559,7 +559,7 @@ function abrirConta(aba = "entrar") {
   $("#c-ap").focus();
   formConta("#c-ok", async () => {
     const ap = $("#c-ap").value.trim(), senha = $("#c-senha").value;
-    if (!/^[A-Za-z0-9_]{3,16}$/.test(ap)) throw new Error("O apelido precisa ter de 3 a 16 caracteres: letras, números ou _");
+    if (!/^[A-Za-z0-9_]{3,24}$/.test(ap)) throw new Error("O apelido precisa ter de 3 a 24 caracteres: letras, números ou _");
     if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres");
     if (criar) {
       if (senha !== $("#c-senha2").value) throw new Error("As duas senhas estão diferentes");
@@ -630,7 +630,7 @@ function telaContaLogado() {
   abrirDialogo("Minha conta", `
     <p class="ola">Você entrou como <b>${esc(NUVEM.apelido)}</b></p>
     <p class="dica">${status}</p>
-    <label class="campo">Nome do 2º jogador (Dupla)<input id="c-n2" maxlength="16" value="${esc(cfg.nome2)}"></label>
+    <label class="campo">Nome do 2º jogador (Dupla)<input id="c-n2" maxlength="24" value="${esc(cfg.nome2)}"></label>
     <p class="erro" id="c-erro" role="alert"></p>
     <div class="acoes">
       <button class="btn sec" id="c-codigo-novo">Novo código de recuperação</button>
@@ -655,7 +655,7 @@ function telaContaLogado() {
 function telaApagar() {
   abrirDialogo("Apagar a conta?", `
     <p>A conta <b>${esc(NUVEM.apelido)}</b> e todas as estatísticas dela serão apagadas para sempre. Não dá para desfazer.</p>
-    <label class="campo">Para confirmar, digite o seu apelido<input id="c-conf" maxlength="16" autocomplete="off" autocapitalize="off"></label>
+    <label class="campo">Para confirmar, digite o seu apelido<input id="c-conf" maxlength="24" autocomplete="off" autocapitalize="off"></label>
     <p class="erro" id="c-erro" role="alert"></p>
     <div class="acoes">
       <button class="btn sec" id="c-voltar">Voltar</button>

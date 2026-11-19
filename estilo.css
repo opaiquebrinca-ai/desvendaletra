@@ -165,7 +165,8 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
 }
 .transicao[hidden] { display: none; }
 .tr-sub { margin: 0; font-size: 1.2rem; opacity: .9; }
-.tr-nome { margin: 0 0 8px; font-size: 2.6rem; font-weight: 800; }
+.tr-nome { margin: 0 0 8px; font-size: clamp(1.6rem, 8vw, 2.6rem); font-weight: 800; overflow-wrap: anywhere; max-width: 100%; }
+.vez, .troca span, .ola b { overflow-wrap: anywhere; }
 .tr-dica { margin: 0 0 24px; opacity: .85; }
 .transicao .btn { background: #fff; color: var(--primaria); }
 
