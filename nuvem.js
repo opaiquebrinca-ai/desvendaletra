@@ -103,7 +103,20 @@ const NUVEM = (() => {
     gravar("stats-pendente", null);
   }
 
+  // Chama uma função do servidor já com o login do jogador (usada pelas salas online).
+  async function comLogin(nome, corpo) {
+    return pedir(`/functions/v1/${nome}`, { corpo, token: await token() });
+  }
+
+  // Ranking Mundial: qualquer um vê; logado, a linha "eu" vem marcada (mesmo fora do top).
+  async function ranking(limite = 50) {
+    let tok = null;
+    try { tok = await token(); } catch { /* sem login: vê o ranking mesmo assim */ }
+    return pedir("/rest/v1/rpc/ranking", { corpo: { limite }, token: tok });
+  }
+
   return {
+    URL: URL_SUPA, CHAVE, comLogin, ranking,
     get logado() { return !!sessao; },
     get apelido() { return sessao?.apelido || null; },
     get pendente() { return !!ler("stats-pendente", false); },

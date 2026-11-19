@@ -18,7 +18,7 @@ function calcularPontos(tamanho, nivel, seq = 1) {
   return { base, mult, bonus, total: Math.round(base * mult * (1 + bonus)) };
 }
 const numBR = n => n.toLocaleString("pt-BR");
-const MODOS = { I: "Individual", D: "Dupla" };
+const MODOS = { I: "Individual", D: "Dupla", M: "Online" };
 
 const sem_acento = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 
@@ -49,12 +49,14 @@ const cfg = Object.assign(
 const statsVazias = () => ({
   I: { jogos: 0, vitorias: 0, seq: 0, melhor: 0, dist: {}, pontos: 0, recorde: 0 },
   D: { partidas: 0, empates: 0, vitorias: {}, pontos: {} },
+  M: { partidas: 0, vitorias: 0, pontos: 0 },
 });
 const stats = statsVazias();
 function aplicarStats(dados) {
   const base = statsVazias();
   stats.I = Object.assign(base.I, dados?.I || {});
   stats.D = Object.assign(base.D, dados?.D || {});
+  stats.M = Object.assign(base.M, dados?.M || {});
 }
 const chaveStats = () => (NUVEM.logado ? "stats-conta" : "stats");
 aplicarStats(guarda.ler(chaveStats(), {}));
@@ -116,6 +118,16 @@ const jogadorDaVez = () => J.jogadores[J.vez];
 const nomeDe = i => (i === 0 ? NUVEM.apelido || cfg.nome1 : cfg.nome2) || `Jogador ${i + 1}`;
 const esgotou = j => j.tentativas.length >= J.max;
 
+// Letras azuis já descobertas: aparecem prontas na linha seguinte, no mesmo lugar.
+// J.atual guarda só o que o jogador digita nas casas livres; montar() junta as duas coisas.
+function fixas(j = jogadorDaVez()) {
+  const f = Array(J.tamanho).fill(null);
+  j.avaliacoes.forEach((av, k) => av.forEach((e, i) => { if (e === "c") f[i] = j.tentativas[k][i]; }));
+  return f;
+}
+const livres = (f = fixas()) => f.filter(x => !x).length;
+function montar(f = fixas()) { let k = 0; return f.map(x => x || J.atual[k++] || ""); }
+
 /* ---------- desenho ---------- */
 const $ = s => document.querySelector(s);
 const tabuleiro = $("#tabuleiro");
@@ -137,8 +149,10 @@ function desenhar(animarUltima = false) {
   const usadas = j.tentativas.length;
   $("#st-tent").textContent = `${Math.min(usadas + (J.fim || esgotou(j) ? 0 : 1), J.max)}/${J.max}`;
   const vez = $("#st-vez");
-  vez.hidden = J.modo !== "D";
+  vez.hidden = J.modo === "I";
   if (J.modo === "D") vez.textContent = J.fim ? "Partida encerrada" : `Vez de ${nomeDe(J.vez)}`;
+  if (J.modo === "M") vez.textContent = `Sala ${J.online.codigo} · ${J.online.jogadores.length} jogadores`;
+  desenharRivais();
 
   let html = "";
   j.tentativas.forEach((t, k) => {
@@ -148,8 +162,11 @@ function desenhar(animarUltima = false) {
       [...t].map((l, i) => casaHTML(l, av[i], i, anima)).join("") + "</div>";
   });
   if (!J.fim && !esgotou(j)) {
+    const f = fixas(j), m = montar(f);
     html += `<div class="linha" id="linha-atual" style="--n:${n}" aria-label="Tentativa atual">` +
-      Array.from({ length: n }, (_, i) => casaHTML(J.atual[i], null, i)).join("") + "</div>";
+      m.map((l, i) => f[i]
+        ? `<div class="casa fixa" style="--i:${i}" aria-label="${l}, já descoberta">${l}</div>`
+        : casaHTML(l, null, i)).join("") + "</div>";
   }
   tabuleiro.innerHTML = html;
   tabuleiro.scrollTop = tabuleiro.scrollHeight;
@@ -172,8 +189,10 @@ function desenharTeclado(j) {
 function linhaAtualAtualizar() {
   const linha = $("#linha-atual");
   if (!linha) return;
+  const m = montar();
   [...linha.children].forEach((c, i) => {
-    const l = J.atual[i] || "";
+    if (c.classList.contains("fixa")) return;
+    const l = m[i] || "";
     if (c.textContent !== l) {
       c.textContent = l;
       c.classList.toggle("cheia", !!l);
@@ -197,10 +216,11 @@ function tecla(k) {
   if (!J || J.fim || travado || !$("#transicao").hidden || $("#dlg").open) return;
   const j = jogadorDaVez();
   if (esgotou(j)) return;
-  if (k === "Enter") return enviar();
+  if (J.modo === "M" && J.online.status !== "jogando") return aviso("Espere quem criou a sala tocar em Começar");
+  if (k === "Enter") return J.modo === "M" ? enviarOnline() : enviar();
   if (k === "Backspace") { J.atual = J.atual.slice(0, -1); return linhaAtualAtualizar(); }
   const letra = sem_acento(k);
-  if (/^[A-Z]$/.test(letra) && J.atual.length < J.tamanho) {
+  if (/^[A-Z]$/.test(letra) && J.atual.length < livres()) {
     J.atual += letra;
     linhaAtualAtualizar();
   }
@@ -208,12 +228,12 @@ function tecla(k) {
 
 function enviar() {
   const j = jogadorDaVez();
-  if (J.atual.length < J.tamanho) {
+  if (J.atual.length < livres()) {
     const linha = $("#linha-atual");
     linha?.classList.remove("treme"); void linha?.offsetWidth; linha?.classList.add("treme");
     return aviso(`A palavra tem ${J.tamanho} letras`);
   }
-  const t = J.atual;
+  const t = montar().join("");
   const av = avaliar(t, J.segredo);
   j.tentativas.push(t);
   j.avaliacoes.push(av);
@@ -307,7 +327,11 @@ function encerrar(r) {
 function mostrarFim() {
   const r = J.resultado;
   let titulo, texto;
-  if (J.modo === "I") {
+  if (J.modo === "M") {
+    const n = J.jogadores[0].tentativas.length;
+    titulo = r.venceu ? "Você venceu!" : r.vencedor ? `${r.vencedor} venceu!` : "Ninguém acertou";
+    texto = r.venceu ? `Acertou na ${n}ª tentativa, antes de todo mundo.` : "A palavra era:";
+  } else if (J.modo === "I") {
     const n = J.jogadores[0].tentativas.length;
     titulo = r.venceu ? "Acertou!" : "Não foi dessa vez";
     texto = r.venceu ? `Em ${n} de ${J.max} tentativas.` : "A palavra era:";
@@ -405,6 +429,7 @@ function soltarConfetes() {
 /* ---------- diálogos ---------- */
 const dlg = $("#dlg");
 function abrirDialogo(titulo, corpo) {
+  delete dlg.dataset.tela;
   $("#dlg-titulo").textContent = titulo;
   $("#dlg-corpo").innerHTML = corpo;
   if (!dlg.open) dlg.showModal();
@@ -417,9 +442,9 @@ dlg.addEventListener("click", e => {
   }
   if (e.target === dlg || e.target.closest("[data-fechar]")) return dlg.close();
   const acao = e.target.closest("[data-acao]")?.dataset.acao;
-  if (acao === "nova") { dlg.close(); novaPartida(); }
+  if (acao === "nova") { dlg.close(); if (J?.modo === "M") abrirOnline(); else novaPartida(); }
   if (acao === "stats") abrirStats();
-  if (acao === "trocar") { dlg.close(); novaPartida(dlg.dataset.modo); }
+  if (acao === "trocar") { dlg.close(); sairDaSala(); novaPartida(dlg.dataset.modo); }
 });
 
 function emAndamento() {
@@ -427,6 +452,15 @@ function emAndamento() {
 }
 
 function trocarModo(modo) {
+  if (J?.modo === "M" && !J.fim) {
+    dlg.dataset.modo = modo;
+    return abrirDialogo("Sair da sala online?", `
+      <p>Você sai da sala ${esc(J.online.codigo)}${J.online.status === "jogando" ? " e deixa a partida pela metade" : ""}.</p>
+      <div class="acoes">
+        <button class="btn sec" data-fechar>Ficar</button>
+        <button class="btn" data-acao="trocar">Sair e jogar ${MODOS[modo]}</button>
+      </div>`);
+  }
   if (!emAndamento()) return novaPartida(modo);
   dlg.dataset.modo = modo;
   abrirDialogo("Começar outra partida?", `
@@ -466,6 +500,8 @@ function abrirStats() {
     </div>
     <div class="grupo">Acertou em quantas tentativas</div>
     <div class="dist">${dist}</div>
+    <div class="grupo">Online</div>
+    <p>${stats.M.partidas} partidas · ${stats.M.vitorias} vitórias · ${numBR(stats.M.pontos)} pontos</p>
     <div class="grupo">Dupla</div>
     <p>${d.partidas} partidas · ${d.empates} empates</p>${placar}`);
 }
@@ -502,6 +538,188 @@ function abrirConfig() {
     cfg.simbolos = e.target.checked; guarda.gravar("cfg", cfg);
     document.body.classList.toggle("simbolos", cfg.simbolos);
   });
+}
+
+/* ---------- online: salas (2 a 4 jogadores, mesma palavra, quem acertar primeiro) ---------- */
+function desenharRivais() {
+  const box = $("#rivais");
+  if (!J || J.modo !== "M") { box.hidden = true; box.innerHTML = ""; return; }
+  const rivais = J.online.jogadores.filter(x => !x.eu);
+  box.hidden = rivais.length === 0;
+  box.innerHTML = rivais.map(r => {
+    const ultimas = r.cores.slice(-3).map(c =>
+      `<div class="mini-linha">${[...c].map(e => `<i data-e="${e}"></i>`).join("")}</div>`).join("");
+    return `<div class="rival${r.acertou ? " acertou" : ""}">
+      <div class="rival-cab"><span class="rival-nome">${esc(r.apelido)}</span><span class="rival-tent">${r.cores.length}/${J.max}</span></div>
+      ${ultimas || `<div class="mini-vazio">ainda não jogou</div>`}</div>`;
+  }).join("");
+}
+
+function abrirOnline() {
+  if (J?.modo === "M" && !J.fim) {
+    if (J.online.status === "esperando") return telaSala();
+    return aviso("Você já está numa partida online");
+  }
+  if (!NUVEM.logado) {
+    abrirDialogo("Jogar online", `
+      <p>Jogue com amigos, cada um no seu celular: a mesma palavra para todos, e ganha quem acertar primeiro.</p>
+      <p>Para isso, entre na sua conta (só apelido e senha).</p>
+      <div class="acoes"><button class="btn" id="on-conta">Entrar ou criar conta</button></div>`);
+    $("#on-conta").addEventListener("click", () => abrirConta());
+    return;
+  }
+  abrirDialogo("Jogar online", `
+    <p class="dica">De 2 a 4 jogadores, cada um no seu celular. Mesma palavra para todos: ganha quem acertar primeiro.</p>
+    <div class="grupo">Criar uma sala</div>
+    <p class="dica">${NIVEIS[cfg.nivel].nome} · ${cfg.tamanho} letras · ${NIVEIS[cfg.nivel].tentativas} tentativas (muda em Configurações)</p>
+    <div class="acoes centro-acoes"><button class="btn" id="on-criar">Criar sala</button></div>
+    <div class="grupo">Entrar numa sala</div>
+    <label class="campo">Código da sala (5 letras)
+      <input id="on-codigo" maxlength="5" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCDE"></label>
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes"><button class="btn" id="on-entrar">Entrar na sala</button></div>`);
+  const cod = $("#on-codigo");
+  cod.addEventListener("input", () => { cod.value = cod.value.toUpperCase().replace(/[^A-Z]/g, ""); });
+  formConta("#on-criar", async () => {
+    const r = await ONLINE.criar(cfg.tamanho, cfg.nivel);
+    iniciarOnline(r.codigo);
+  });
+  formConta("#on-entrar", async () => {
+    if (cod.value.length !== 5) throw new Error("O código tem 5 letras");
+    const r = await ONLINE.entrar(cod.value);
+    iniciarOnline(r.codigo);
+  });
+}
+
+function iniciarOnline(codigo) {
+  J = {
+    modo: "M", online: { codigo, status: "esperando", jogadores: [], souCriador: false },
+    tamanho: cfg.tamanho, nivel: cfg.nivel, max: NIVEIS[cfg.nivel].tentativas,
+    jogadores: [novoJogador()], vez: 0, atual: "", fim: false, resultado: null, exibir: "",
+  };
+  salvarPartida();
+  desenhar();
+  telaSala();
+  ONLINE.escutar(codigo, aplicarEstado, erroOnline);
+}
+
+// Sala de espera: mostra o código para passar aos amigos e quem já entrou.
+function telaSala() {
+  const o = J.online;
+  const lista = o.jogadores.length
+    ? o.jogadores.map(j => `<li>${esc(j.apelido)}${j.criador ? " <small>(criou)</small>" : ""}${j.eu ? " <small>(você)</small>" : ""}</li>`).join("")
+    : `<li class="dica">carregando…</li>`;
+  const dono = o.jogadores.find(j => j.criador)?.apelido;
+  abrirDialogo(`Sala ${o.codigo}`, `
+    <p>Passe este código para os amigos:</p>
+    <p class="codigo-grande">${esc(o.codigo)}</p>
+    <div class="acoes centro-acoes"><button class="btn sec" id="sala-copiar">Copiar código</button></div>
+    <p class="dica centro">${NIVEIS[J.nivel].nome} · ${J.tamanho} letras · até 4 jogadores</p>
+    <div class="grupo">Na sala (${o.jogadores.length})</div>
+    <ul class="lista-sala">${lista}</ul>
+    <p class="erro" id="c-erro" role="alert"></p>
+    <div class="acoes">
+      <button class="btn sec" id="sala-sair">Sair da sala</button>
+      ${o.souCriador
+        ? `<button class="btn" id="sala-comecar" ${o.jogadores.length < 2 ? "disabled" : ""}>Começar</button>`
+        : `<span class="dica">Esperando ${esc(dono || "quem criou")} começar…</span>`}
+    </div>`);
+  dlg.dataset.tela = "sala";
+  $("#sala-copiar").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(o.codigo); aviso("Código copiado"); }
+    catch { aviso("Não deu para copiar. Dite o código."); }
+  });
+  $("#sala-sair").addEventListener("click", () => { dlg.close(); sairDaSala(); novaPartida("I"); });
+  if ($("#sala-comecar")) formConta("#sala-comecar", async () => { await ONLINE.comecar(o.codigo); });
+}
+
+function sairDaSala() {
+  if (J?.modo !== "M") return;
+  const cod = J.online.codigo;
+  ONLINE.parar();
+  if (!J.fim) ONLINE.sair(cod).catch(() => {});
+}
+
+// Estado novo vindo do servidor: atualiza sala, tabuleiro e adversários.
+function aplicarEstado(e) {
+  if (!J || J.modo !== "M" || J.online.codigo !== e.codigo) return;
+  const antes = J.online.status;
+  Object.assign(J.online, { status: e.status, jogadores: e.jogadores, souCriador: e.souCriador });
+  J.tamanho = e.tamanho; J.nivel = e.nivel; J.max = e.max;
+  const eu = J.jogadores[0];
+  if (!travado && e.minhas.length !== eu.tentativas.length) { // reabriu o app: refaz o tabuleiro
+    const novo = novoJogador();
+    const ordem = { c: 3, p: 2, a: 1 };
+    for (const m of e.minhas) {
+      const av = [...m.cores];
+      novo.tentativas.push(m.letras); novo.avaliacoes.push(av);
+      [...m.letras].forEach((l, i) => { if ((ordem[av[i]] || 0) > (ordem[novo.teclas[l]] || 0)) novo.teclas[l] = av[i]; });
+    }
+    J.jogadores[0] = novo;
+  }
+  if (e.status === "esperando" && dlg.open && dlg.dataset.tela === "sala") telaSala();
+  if (e.status === "jogando" && antes === "esperando") {
+    if (dlg.open && dlg.dataset.tela === "sala") dlg.close();
+    aviso("Valendo! Boa sorte", 2200);
+  }
+  salvarPartida();
+  if (e.status === "fim" && !J.fim) return encerrarOnline(e);
+  if (!travado) desenhar(); else desenharRivais();
+}
+
+function erroOnline(err) {
+  if (err.status === 404 || err.status === 403) {
+    ONLINE.parar();
+    if (dlg.open && dlg.dataset.tela === "sala") dlg.close();
+    aviso("A sala foi fechada", 2500);
+    novaPartida("I");
+  }
+}
+
+async function enviarOnline() {
+  if (J.atual.length < livres()) {
+    const linha = $("#linha-atual");
+    linha?.classList.remove("treme"); void linha?.offsetWidth; linha?.classList.add("treme");
+    return aviso(`A palavra tem ${J.tamanho} letras`);
+  }
+  const t = montar().join("");
+  travado = true; teclado.classList.add("travado");
+  let r;
+  try { r = await ONLINE.jogar(J.online.codigo, t); }
+  catch (e) { travado = false; teclado.classList.remove("travado"); return aviso(e.message, 2200); }
+  if (!r.cores) { // a partida acabou enquanto a tentativa ia
+    travado = false; teclado.classList.remove("travado");
+    return aplicarEstado(await ONLINE.estado(J.online.codigo));
+  }
+  const j = J.jogadores[0], av = [...r.cores], ordem = { c: 3, p: 2, a: 1 };
+  j.tentativas.push(t); j.avaliacoes.push(av); J.atual = "";
+  [...t].forEach((l, i) => { if ((ordem[av[i]] || 0) > (ordem[j.teclas[l]] || 0)) j.teclas[l] = av[i]; });
+  desenhar(true);
+  salvarPartida();
+  const espera = matchMedia("(prefers-reduced-motion: reduce)").matches ? 50 : J.tamanho * 110 + 500;
+  setTimeout(async () => {
+    travado = false; teclado.classList.remove("travado");
+    try { aplicarEstado(await ONLINE.estado(J.online.codigo)); } catch { desenhar(); }
+  }, espera);
+}
+
+function encerrarOnline(e) {
+  ONLINE.parar();
+  J.fim = true;
+  J.exibir = e.palavra || "";
+  const venceu = !!e.jogadores.find(x => x.eu)?.venceu;
+  const r = { venceu, vencedor: e.vencedor };
+  stats.M.partidas++;
+  if (venceu) {
+    r.pontos = calcularPontos(J.tamanho, J.nivel, 1);
+    stats.M.vitorias++;
+    stats.M.pontos += r.pontos.total;
+  }
+  J.resultado = r;
+  salvarStats();
+  salvarPartida();
+  desenhar();
+  setTimeout(() => { mostrarFim(); if (venceu) soltarConfetes(); }, 300);
 }
 
 /* ---------- conta (apelido + senha, sem e-mail) ---------- */
@@ -578,6 +796,7 @@ function abrirConta(aba = "entrar") {
     </div>
     ${campoApelido()}
     ${campoSenha("c-senha", "Senha", criar)}
+    ${criar ? `<p class="dica-campo">Mínimo de 6 caracteres. Pode ser só letras ou só números.</p>` : ""}
     ${criar ? campoSenha("c-senha2", "Repita a senha", true) +
       `<p class="dica">Use um apelido, não o seu nome completo. Só pedimos apelido e senha.</p>` : ""}
     <p class="erro" id="c-erro" role="alert"></p>
@@ -728,19 +947,86 @@ document.querySelector(".barra").addEventListener("click", e => {
   const nav = e.target.closest("[data-nav]")?.dataset.nav;
   if (!nav) return;
   if (nav === "I" || nav === "D") return trocarModo(nav);
-  if (nav === "M") return emBreve("Multiplayer", "Jogar online contra amigos, cada um no seu aparelho.");
-  if (nav === "mundial") return emBreve("Mundial", "Ranking com jogadores do mundo todo.");
+  if (nav === "M") return abrirOnline();
+  if (nav === "mundial") return abrirMundial();
   if (nav === "stats") return abrirStats();
   if (nav === "config") return abrirConfig();
 });
 $("#btn-conta").addEventListener("click", () => abrirConta());
+$("#btn-ajuda").addEventListener("click", abrirAjuda);
+
+/* ---------- ranking Mundial ---------- */
+async function abrirMundial() {
+  abrirDialogo("Ranking Mundial", `<p class="dica centro">Carregando…</p>`);
+  dlg.dataset.tela = "mundial";
+  let linhas;
+  try {
+    // antes de ver o ranking, garante que os pontos deste aparelho já subiram
+    if (NUVEM.logado) await NUVEM.enviarStats(stats).catch(() => {});
+    linhas = await NUVEM.ranking(50);
+  } catch (e) {
+    if (dlg.dataset.tela === "mundial") $("#dlg-corpo").innerHTML = `<p class="erro">${esc(e.message)}</p>`;
+    return;
+  }
+  if (dlg.dataset.tela !== "mundial") return; // fechou ou abriu outra tela enquanto carregava
+  const medalha = p => (p <= 3 ? ` medalha m${p}` : "");
+  const lista = linhas.length ? linhas.map((l, i) => {
+    const pulo = i > 0 && l.posicao > linhas[i - 1].posicao + 1 && l.eu ? `<li class="pulo">⋯</li>` : "";
+    return `${pulo}<li class="${l.eu ? "eu" : ""}">
+      <span class="pos${medalha(l.posicao)}">${l.posicao}</span>
+      <span class="nome">${esc(l.apelido)}${l.eu ? " <small>(você)</small>" : ""}</span>
+      <span class="pts">${numBR(l.pontos)}</span></li>`;
+  }).join("") : `<li class="dica">Ninguém pontuou ainda. Seja o primeiro!</li>`;
+  const rodape = NUVEM.logado
+    ? (linhas.some(l => l.eu) ? "" : `<p class="dica centro">Ganhe uma partida para aparecer aqui.</p>`)
+    : `<p class="dica centro">Crie uma conta para aparecer no ranking.</p>
+       <div class="acoes centro-acoes"><button class="btn" id="mun-conta">Entrar ou criar conta</button></div>`;
+  $("#dlg-corpo").innerHTML = `
+    <p class="dica">Soma dos pontos do Individual e do Online de cada jogador.</p>
+    <ol class="ranking">${lista}</ol>${rodape}`;
+  $("#mun-conta")?.addEventListener("click", () => abrirConta());
+}
+
+/* ---------- ajuda: como jogar ---------- */
+function abrirAjuda() {
+  abrirDialogo("Como jogar", `<div class="ajuda">
+    <p>Descubra a <b>palavra secreta</b>. Digite uma palavra com o mesmo número de letras e toque em <b>ENVIAR</b>.</p>
+    <h3>O que as cores dizem</h3>
+    <div class="legenda">
+      <div>${casaHTML("A", "c", 0)} Azul: a letra está na palavra e no lugar certo</div>
+      <div>${casaHTML("B", "p", 0)} Laranja: a letra está na palavra, mas em outro lugar</div>
+      <div>${casaHTML("C", "a", 0)} Vermelho: a letra não está na palavra</div>
+    </div>
+    <p>As letras azuis já aparecem prontas na linha seguinte, no mesmo lugar: você só digita as que faltam.</p>
+    <p>O teclado também fica colorido, para lembrar das letras já usadas. Acentos não contam: CAFÉ = CAFE.</p>
+    <h3>Modos de jogo</h3>
+    <ul>
+      <li><b>I · Individual:</b> você contra a palavra.</li>
+      <li><b>D · Dupla:</b> dois jogadores no mesmo celular, a mesma palavra, um de cada vez. Uma tela azul esconde as tentativas do outro.</li>
+      <li><b>M · Online:</b> de 2 a 4 amigos, cada um no seu celular. Um cria a sala e passa o código de 5 letras; todos jogam ao mesmo tempo e ganha quem acertar primeiro. Dos adversários você vê só as cores. Precisa de conta.</li>
+    </ul>
+    <h3>Dificuldade e tamanho</h3>
+    <p>Em <b>Config</b>: Fácil (20 tentativas), Médio (15) ou Difícil (10), e palavras de 4 a 7 letras.</p>
+    <h3>Pontos</h3>
+    <p>Cada vitória vale: ${TAMANHOS.map(t => `${t} letras = ${BASE_PONTOS[t]}`).join(", ")}, vezes o nível (Fácil ×1, Médio ×1,5, Difícil ×2). Vitórias seguidas dão +10% cada, até +50%. Perder não tira pontos.</p>
+    <h3>Ranking Mundial</h3>
+    <p>O globo mostra os jogadores com mais pontos (Individual + Online). Para aparecer, é preciso ter conta.</p>
+    <h3>Conta</h3>
+    <p>Só apelido (sem espaço) e senha de pelo menos 6 caracteres. Guarde o <b>código de recuperação</b>: é o único jeito de voltar se esquecer a senha. Com conta, suas estatísticas ficam salvas em qualquer celular.</p>
+    <div class="acoes"><button class="btn" data-fechar>Entendi</button></div>
+  </div>`);
+}
 
 /* ---------- início ---------- */
 (function iniciar() {
   atualizarBotaoConta();
   sincronizarStats().catch(() => { /* sem internet: segue com o que está no aparelho */ });
   const salva = guarda.ler("partida", null);
-  if (salva && salva.segredo && BANCO[salva.tamanho]?.has(salva.segredo) && !salva.fim) {
+  if (salva?.modo === "M" && !salva.fim && NUVEM.logado) {
+    J = salva;
+    desenhar();
+    ONLINE.escutar(J.online.codigo, aplicarEstado, erroOnline);
+  } else if (salva && salva.segredo && BANCO[salva.tamanho]?.has(salva.segredo) && !salva.fim) {
     J = salva;
     desenhar();
     if (J.modo === "D") mostrarTransicao(J.vez);

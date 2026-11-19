@@ -27,6 +27,7 @@
 
 <div class="app">
   <header class="topo">
+    <button class="btn-icone ajuda-btn" id="btn-ajuda" aria-label="Como jogar">?</button>
     <h1 class="titulo">DesvendaLetra</h1>
     <button class="btn-icone" id="btn-conta" aria-label="Minha conta"><svg class="ic"><use href="#i-user"/></svg></button>
   </header>
@@ -37,6 +38,7 @@
     <span class="st-tent" id="st-tent">1/20</span>
   </div>
   <div class="vez" id="st-vez" hidden></div>
+  <div class="rivais" id="rivais" hidden aria-label="Adversários"></div>
 
   <main class="tabuleiro" id="tabuleiro" aria-label="Tabuleiro"></main>
 
@@ -76,6 +78,7 @@
 
 <script src="palavras.js"></script>
 <script src="nuvem.js"></script>
+<script src="online.js"></script>
 <script src="jogo.js"></script>
 </body>
 </html>
