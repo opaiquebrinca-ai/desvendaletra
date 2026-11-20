@@ -98,7 +98,12 @@ function avaliar(tentativa, segredo) {
 
 function novoJogador() { return { tentativas: [], avaliacoes: [], teclas: {}, acertou: false }; }
 
-function novaPartida(modo = J?.modo || "I") {
+function novaPartida(modo = J?.modo || "I", adversario) {
+  // Dupla: na primeira vez pergunta quem é o adversário; em "Jogar de novo" repete o mesmo
+  if (modo === "D" && !adversario) {
+    if (J?.modo === "D" && J.adversario) adversario = J.adversario;
+    else return escolherAdversario();
+  }
   const lista = [...BANCO[cfg.tamanho].keys()];
   const segredo = lista[Math.floor(Math.random() * lista.length)];
   J = {
@@ -106,6 +111,7 @@ function novaPartida(modo = J?.modo || "I") {
     tamanho: cfg.tamanho, nivel: cfg.nivel, max: NIVEIS[cfg.nivel].tentativas,
     jogadores: modo === "D" ? [novoJogador(), novoJogador()] : [novoJogador()],
     vez: 0, atual: "", fim: false, resultado: null,
+    adversario: modo === "D" ? adversario : null,
   };
   salvarPartida();
   desenhar();
@@ -115,7 +121,7 @@ function novaPartida(modo = J?.modo || "I") {
 function salvarPartida() { guarda.gravar("partida", J); }
 
 const jogadorDaVez = () => J.jogadores[J.vez];
-const nomeDe = i => (i === 0 ? NUVEM.apelido || cfg.nome1 : cfg.nome2) || `Jogador ${i + 1}`;
+const nomeDe = i => (i === 0 ? NUVEM.apelido || cfg.nome1 : J?.adversario?.nome || cfg.nome2) || `Jogador ${i + 1}`;
 const esgotou = j => j.tentativas.length >= J.max;
 
 // Letras azuis já descobertas: aparecem prontas na linha seguinte, no mesmo lugar.
@@ -278,6 +284,94 @@ function depoisDaJogada() {
   }
 }
 
+/* ---------- Dupla: quem joga com você (convidado ou alguém com conta) ---------- */
+// A sessão do adversário com conta fica só nesta aba (sessionStorage), para gravar os pontos dele no fim.
+function sessaoAdversario() {
+  try { return JSON.parse(sessionStorage.getItem("jt:adv") || "null"); } catch { return null; }
+}
+function guardarSessaoAdversario(s) {
+  try { if (s) sessionStorage.setItem("jt:adv", JSON.stringify(s)); else sessionStorage.removeItem("jt:adv"); } catch { /* sem armazenamento */ }
+}
+
+function escolherAdversario(aba = "convidado") {
+  const conta = aba === "conta";
+  const eu = NUVEM.apelido || cfg.nome1 || "Jogador 1";
+  abrirDialogo("Dupla: quem joga com você?", `
+    <p class="dica">Os dois jogam a mesma palavra, no mesmo celular, um de cada vez. Você é <b>${esc(eu)}</b>.</p>
+    <div class="abas" role="tablist">
+      <button role="tab" aria-selected="${!conta}" data-aba="convidado">Convidado</button>
+      <button role="tab" aria-selected="${conta}" data-aba="conta">Tem conta</button>
+    </div>
+    ${conta ? `
+      <label class="campo">Buscar pelo apelido
+        <input id="adv-busca" maxlength="24" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 2 letras ou mais"></label>
+      <ul class="busca-lista" id="adv-lista" role="listbox"></ul>
+      <div id="adv-senha-box" hidden>
+        ${campoSenha("adv-senha", "Senha de quem vai jogar", false)}
+        <p class="dica-campo">A senha só confirma que é mesmo essa pessoa. Quem vencer leva os pontos para a própria conta.</p>
+      </div>
+      <p class="erro" id="c-erro" role="alert"></p>
+      <div class="acoes"><button class="btn" id="adv-ok" disabled>Confirmar e começar</button></div>`
+    : `
+      <label class="campo">Nome do convidado
+        <input id="adv-nome" maxlength="24" value="${esc(cfg.nome2 === "Jogador 2" ? "" : cfg.nome2)}" placeholder="Jogador 2"></label>
+      <p class="dica-campo">Convidado não soma pontos no ranking. ${NUVEM.logado ? "Se você vencer, os pontos vão para a sua conta." : "Entre na sua conta para os seus pontos irem para o ranking."}</p>
+      <p class="erro" id="c-erro" role="alert"></p>
+      <div class="acoes"><button class="btn" id="adv-ok">Começar</button></div>`}`);
+  $("#dlg-corpo").querySelectorAll("[data-aba]").forEach(b => b.addEventListener("click", () => escolherAdversario(b.dataset.aba)));
+
+  if (!conta) {
+    $("#adv-nome").focus();
+    formConta("#adv-ok", async () => {
+      const nome = $("#adv-nome").value.trim() || "Jogador 2";
+      cfg.nome2 = nome; guarda.gravar("cfg", cfg);
+      guardarSessaoAdversario(null);
+      dlg.close();
+      novaPartida("D", { tipo: "convidado", nome });
+    });
+    return;
+  }
+
+  ligarCamposConta();
+  let escolhido = null, espera = null;
+  const busca = $("#adv-busca"), lista = $("#adv-lista");
+  busca.focus();
+  busca.addEventListener("input", () => {
+    escolhido = null; $("#adv-senha-box").hidden = true; $("#adv-ok").disabled = true;
+    clearTimeout(espera);
+    const termo = busca.value.trim();
+    if (termo.length < 2) { lista.innerHTML = ""; return; }
+    espera = setTimeout(async () => {
+      try {
+        const achados = await NUVEM.buscarJogadores(termo);
+        if (busca.value.trim() !== termo) return;
+        lista.innerHTML = achados.length
+          ? achados.map(a => `<li><button type="button" role="option" data-ap="${esc(a.apelido)}">${esc(a.apelido)}</button></li>`).join("")
+          : `<li class="dica">Ninguém com esse apelido.</li>`;
+      } catch (e) { lista.innerHTML = `<li class="erro">${esc(e.message)}</li>`; }
+    }, 300);
+  });
+  lista.addEventListener("click", e => {
+    const b = e.target.closest("[data-ap]");
+    if (!b) return;
+    escolhido = b.dataset.ap;
+    busca.value = escolhido;
+    lista.innerHTML = "";
+    $("#adv-senha-box").hidden = false;
+    $("#adv-ok").disabled = false;
+    $("#adv-senha").focus();
+  });
+  formConta("#adv-ok", async () => {
+    if (!escolhido) throw new Error("Escolha alguém da lista");
+    const senha = $("#adv-senha").value;
+    if (!senha) throw new Error("Digite a senha de quem vai jogar");
+    const sess = await NUVEM.conferirAdversario(escolhido, senha);
+    guardarSessaoAdversario(sess);
+    dlg.close();
+    novaPartida("D", { tipo: "conta", nome: sess.apelido, id: sess.id });
+  });
+}
+
 /* ---------- transição da Dupla ---------- */
 const ESPERA_PASSAR_VEZ = 3000; // ms que a tentativa fica à vista antes da tela de passar a vez
 function mostrarTransicao(i) {
@@ -321,6 +415,22 @@ function encerrar(r) {
       s.vitorias[nome] = (s.vitorias[nome] || 0) + 1;
       r.pontos = calcularPontos(J.tamanho, J.nivel, 1);
       s.pontos[nome] = (s.pontos[nome] || 0) + r.pontos.total;
+      // pontos para a CONTA de quem venceu (vão para o ranking); convidado não pontua
+      if (r.vencedor === 0) {
+        if (NUVEM.logado) {
+          s.contaPontos = (s.contaPontos || 0) + r.pontos.total;
+          s.contaVitorias = (s.contaVitorias || 0) + 1;
+          r.destino = "conta";
+        } else r.destino = "aparelho";
+      } else if (J.adversario?.tipo === "conta") {
+        r.destino = "adversario";
+        const sess = sessaoAdversario();
+        if (sess?.id === J.adversario.id) {
+          NUVEM.creditarAdversario(sess, r.pontos.total)
+            .then(() => { guardarSessaoAdversario(sess); aviso(`Pontos guardados na conta de ${J.adversario.nome}`, 2500); })
+            .catch(() => aviso(`Não deu para guardar os pontos de ${J.adversario.nome} agora`, 3000));
+        } else aviso(`Para guardar os pontos de ${J.adversario.nome}, escolha a conta dele de novo`, 3500);
+      } else r.destino = "convidado";
     }
   }
   salvarStats();
@@ -354,7 +464,9 @@ function mostrarFim() {
     <p class="pontos" aria-live="polite">+<span id="fim-pontos" data-alvo="${p.total}">${numBR(p.total)}</span> pontos</p>
     <p class="conta-pontos">${J.tamanho} letras (${p.base}) × ${NIVEIS[J.nivel].nome} (×${numBR(p.mult)})${
       p.bonus ? ` × sequência de ${stats.I.seq} (+${Math.round(p.bonus * 100)}%)` : ""}</p>
-    ${r.recorde ? `<p class="recorde">Novo recorde!</p>` : ""}` : "";
+    ${r.recorde ? `<p class="recorde">Novo recorde!</p>` : ""}
+    ${r.destino === "convidado" ? `<p class="dica centro">Convidado não soma pontos no ranking.</p>` : ""}
+    ${r.destino === "aparelho" ? `<p class="dica centro">Sem conta, os pontos ficam só neste aparelho.</p>` : ""}` : "";
   abrirDialogo(titulo, `
     <p class="centro">${texto}</p>${palavraHTML()}${blocoPontos}
     <div class="acoes">
@@ -469,6 +581,7 @@ function trocarModo(modo) {
         <button class="btn" data-acao="trocar">Sair e jogar ${MODOS[modo]}</button>
       </div>`);
   }
+  if (modo === "D" && J?.modo === "D" && !emAndamento()) return escolherAdversario();
   if (!emAndamento()) return novaPartida(modo);
   dlg.dataset.modo = modo;
   abrirDialogo("Começar outra partida?", `
@@ -965,7 +1078,7 @@ $("#btn-ajuda").addEventListener("click", abrirAjuda);
 
 /* ---------- ranking Mundial ---------- */
 async function abrirMundial() {
-  abrirDialogo("Ranking Mundial", `<p class="dica centro">Carregando…</p>`);
+  abrirDialogo("Ranking", `<p class="dica centro">Carregando…</p>`);
   dlg.dataset.tela = "mundial";
   let linhas;
   try {
@@ -990,7 +1103,7 @@ async function abrirMundial() {
     : `<p class="dica centro">Crie uma conta para aparecer no ranking.</p>
        <div class="acoes centro-acoes"><button class="btn" id="mun-conta">Entrar ou criar conta</button></div>`;
   $("#dlg-corpo").innerHTML = `
-    <p class="dica">Soma dos pontos do Individual e do Online de cada jogador.</p>
+    <p class="dica">Soma dos pontos do Individual, do Online e da Dupla de cada jogador.</p>
     <ol class="ranking">${lista}</ol>${rodape}`;
   $("#mun-conta")?.addEventListener("click", () => abrirConta());
 }
@@ -1017,8 +1130,8 @@ function abrirAjuda() {
     <p>Em <b>Config</b>: Fácil (20 tentativas), Médio (15) ou Difícil (10), e palavras de 4 a 7 letras.</p>
     <h3>Pontos</h3>
     <p>Cada vitória vale: ${TAMANHOS.map(t => `${t} letras = ${BASE_PONTOS[t]}`).join(", ")}, vezes o nível (Fácil ×1, Médio ×1,5, Difícil ×2). Vitórias seguidas dão +10% cada, até +50%. Perder não tira pontos.</p>
-    <h3>Ranking Mundial</h3>
-    <p>O globo mostra os jogadores com mais pontos (Individual + Online). Para aparecer, é preciso ter conta.</p>
+    <h3>Ranking</h3>
+    <p>A taça mostra os jogadores com mais pontos (Individual, Online e Dupla). Para aparecer, é preciso ter conta. Na Dupla, convidado não pontua.</p>
     <h3>Conta</h3>
     <p>Só apelido (sem espaço) e senha de pelo menos 6 caracteres. Guarde o <b>código de recuperação</b>: é o único jeito de voltar se esquecer a senha. Com conta, suas estatísticas ficam salvas em qualquer celular.</p>
     <div class="acoes"><button class="btn" data-fechar>Entendi</button></div>

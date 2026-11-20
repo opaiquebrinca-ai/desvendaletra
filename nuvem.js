@@ -115,8 +115,40 @@ const NUVEM = (() => {
     return pedir("/rest/v1/rpc/ranking", { corpo: { limite }, token: tok });
   }
 
+  /* ---------- adversário com conta na Dupla (mesmo aparelho) ---------- */
+  async function buscarJogadores(termo) {
+    let tok = null;
+    try { tok = await token(); } catch { /* sem login também busca */ }
+    return pedir("/rest/v1/rpc/buscar_jogadores", { corpo: { termo }, token: tok });
+  }
+
+  // Confere a senha do adversário SEM trocar a conta logada no aparelho.
+  // Devolve só o necessário para, no fim da partida, gravar os pontos na conta dele.
+  async function conferirAdversario(apelido, senha) {
+    const d = await pedir("/auth/v1/token?grant_type=password", {
+      corpo: { email: `${apelido.trim().toLowerCase()}@${DOMINIO}`, password: senha },
+    });
+    if (d.user?.id && d.user.id === sessao?.id) throw new Error("Essa é a sua própria conta. Escolha outra pessoa.");
+    return { id: d.user.id, apelido: d.user?.user_metadata?.apelido || apelido.trim(), refresh_token: d.refresh_token };
+  }
+
+  // Soma uma vitória da Dupla na conta do adversário (usando a sessão dele, guardada só nesta aba).
+  async function creditarAdversario(adv, pontos) {
+    const d = await pedir("/auth/v1/token?grant_type=refresh_token", { corpo: { refresh_token: adv.refresh_token } });
+    adv.refresh_token = d.refresh_token;
+    const linhas = await pedir(`/rest/v1/estatisticas?id=eq.${adv.id}&select=dados`, { metodo: "GET", token: d.access_token });
+    const dados = linhas?.[0]?.dados || {};
+    dados.D = dados.D || {};
+    dados.D.contaPontos = (Number(dados.D.contaPontos) || 0) + pontos;
+    dados.D.contaVitorias = (Number(dados.D.contaVitorias) || 0) + 1;
+    await pedir("/rest/v1/estatisticas?on_conflict=id", {
+      corpo: { id: adv.id, dados, atualizado_em: new Date().toISOString() }, token: d.access_token,
+      extras: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    });
+  }
+
   return {
-    URL: URL_SUPA, CHAVE, comLogin, ranking,
+    URL: URL_SUPA, CHAVE, comLogin, ranking, buscarJogadores, conferirAdversario, creditarAdversario,
     get logado() { return !!sessao; },
     get apelido() { return sessao?.apelido || null; },
     get pendente() { return !!ler("stats-pendente", false); },
