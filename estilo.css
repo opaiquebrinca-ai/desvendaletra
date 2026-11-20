@@ -9,7 +9,9 @@
   --sobre-primaria: #FFFFFF;
   /* cores do jogo (legenda do rascunho) */
   --azul: #2457D6;      /* no lugar certo */
-  --laranja: #D9480F;   /* tem, mas em outro lugar */
+  --laranja: #F59E0B;   /* tem, mas em outro lugar: laranja-amarelado, bem diferente do vermelho */
+  --sobre-laranja: #2B1700; /* letra escura no laranja (contraste alto) */
+  --enviar: #15803D;    /* botão ENVIAR */
   --vermelho: #B42318;  /* não tem */
   --tecla: #DDE3EE;
   --sombra: 0 2px 0 rgba(15, 23, 42, .12);
@@ -26,7 +28,7 @@
   :root {
     --fundo: #0E1424; --cartao: #182036; --texto: #EEF2FA; --texto-2: #A9B4C8;
     --borda: #34405A; --borda-ativa: #8A97B0; --tecla: #2A3450;
-    --primaria: #4C7DF0; --azul: #3D6FE6; --laranja: #E8590C; --vermelho: #C9302C;
+    --primaria: #4C7DF0; --azul: #3D6FE6; --laranja: #F59E0B; --vermelho: #C9302C;
     --sombra: 0 2px 0 rgba(0, 0, 0, .4);
     --ceu: linear-gradient(to bottom left,
       #3B2A6B 0%, #5A3570 14%, #24406E 30%, #1E3263 44%, #3A2D6E 58%,
@@ -141,7 +143,7 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
 .casa.fixa { color: var(--azul); border-color: var(--azul); background: color-mix(in srgb, var(--azul) 14%, var(--cartao)); }
 .casa[data-e] { color: #fff; border-color: transparent; }
 .casa[data-e="c"] { background: var(--azul); }
-.casa[data-e="p"] { background: var(--laranja); }
+.casa[data-e="p"] { background: var(--laranja); color: var(--sobre-laranja); }
 .casa[data-e="a"] { background: var(--vermelho); }
 .casa.vira { animation: vira .45s both; animation-delay: calc(var(--i) * 110ms); }
 
@@ -150,7 +152,7 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
   content: ""; position: absolute; right: 4px; bottom: 4px; width: 7px; height: 7px;
 }
 .simbolos .casa[data-e="c"]::after, .simbolos .tecla[data-e="c"]::after { background: #fff; border-radius: 2px; }
-.simbolos .casa[data-e="p"]::after, .simbolos .tecla[data-e="p"]::after { border: 2px solid #fff; border-radius: 50%; }
+.simbolos .casa[data-e="p"]::after, .simbolos .tecla[data-e="p"]::after { border: 2px solid var(--sobre-laranja); border-radius: 50%; }
 .simbolos .casa[data-e="a"]::after, .simbolos .tecla[data-e="a"]::after { height: 2px; background: rgba(255,255,255,.85); bottom: 6px; }
 
 .toast {
@@ -169,10 +171,14 @@ button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; 
   display: grid; place-items: center; touch-action: manipulation;
 }
 .tecla.larga { max-width: 72px; flex: 1.6; font-size: .85rem; }
+/* ENVIAR: verde, mais largo, à direita (perto do polegar); pulsa quando a linha está completa */
+.tecla.enviar { max-width: 96px; flex: 2.2; background: var(--enviar); color: #fff; font-size: .95rem; font-weight: 800; letter-spacing: .03em; }
+.tecla.enviar.pronto { animation: chama 1.1s ease-in-out infinite; }
+@keyframes chama { 0%, 100% { box-shadow: 0 0 0 0 rgba(21, 128, 61, .55); } 50% { box-shadow: 0 0 0 7px rgba(21, 128, 61, 0); } }
 .tecla:active { transform: translateY(1px); box-shadow: none; }
 .tecla[data-e] { color: #fff; }
 .tecla[data-e="c"] { background: var(--azul); }
-.tecla[data-e="p"] { background: var(--laranja); }
+.tecla[data-e="p"] { background: var(--laranja); color: var(--sobre-laranja); }
 .tecla[data-e="a"] { background: var(--vermelho); opacity: .55; }
 .teclado.travado { pointer-events: none; opacity: .6; }
 

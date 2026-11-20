@@ -176,10 +176,10 @@ function desenhar(animarUltima = false) {
     b.setAttribute("aria-current", String(b.dataset.nav === J.modo)));
 }
 
-const FILAS = ["QWERTYUIOP", "ASDFGHJKL", "+ZXCVBNM-"];
+const FILAS = ["QWERTYUIOP", "ASDFGHJKL", "-ZXCVBNM+"]; // apagar à esquerda, ENVIAR à direita
 function desenharTeclado(j) {
   teclado.innerHTML = FILAS.map(f => `<div class="fila">${[...f].map(c => {
-    if (c === "+") return `<button class="tecla larga" data-k="Enter">ENVIAR</button>`;
+    if (c === "+") return `<button class="tecla larga enviar" data-k="Enter">ENVIAR</button>`;
     if (c === "-") return `<button class="tecla larga" data-k="Backspace" aria-label="Apagar"><svg class="ic"><use href="#i-del"/></svg></button>`;
     const e = j.teclas[c];
     return `<button class="tecla" data-k="${c}"${e ? ` data-e="${e}"` : ""}>${c}</button>`;
@@ -190,6 +190,7 @@ function linhaAtualAtualizar() {
   const linha = $("#linha-atual");
   if (!linha) return;
   const m = montar();
+  $(".tecla.enviar")?.classList.toggle("pronto", J.atual.length >= livres());
   [...linha.children].forEach((c, i) => {
     if (c.classList.contains("fixa")) return;
     const l = m[i] || "";
@@ -263,15 +264,22 @@ function depoisDaJogada() {
   const outroAinda = !esgotou(J.jogadores[outro]);
   if (!outroAinda && esgotou(j)) return encerrar({ empate: true });
   if (outroAinda) {
+    // deixa a tentativa na tela uns segundos antes de esconder e passar a vez
     J.vez = outro;
     salvarPartida();
-    mostrarTransicao(outro);
+    travado = true; teclado.classList.add("travado");
+    aviso(`Vez de ${nomeDe(outro)} em instantes…`, 2800);
+    setTimeout(() => {
+      travado = false; teclado.classList.remove("travado");
+      if (J.modo === "D" && J.vez === outro && !J.fim) mostrarTransicao(outro);
+    }, ESPERA_PASSAR_VEZ);
   } else {
     aviso(`${nomeDe(outro)} já usou todas as tentativas`);
   }
 }
 
 /* ---------- transição da Dupla ---------- */
+const ESPERA_PASSAR_VEZ = 3000; // ms que a tentativa fica à vista antes da tela de passar a vez
 function mostrarTransicao(i) {
   tabuleiro.innerHTML = "";
   $("#tr-nome").textContent = nomeDe(i);

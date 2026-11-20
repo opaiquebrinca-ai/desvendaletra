@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 <style>
   text { font-family: "Arial Rounded MT Bold", "Segoe UI", Arial, sans-serif; font-weight: 800; text-anchor: middle; }
-  .l { font-size: 30px; fill: #fff; }
+  .l { font-size: 30px; }
   .k { font-size: 15px; }
 </style>
 <defs>
@@ -19,35 +19,35 @@
 <rect x="146" y="80" width="150" height="8" rx="4" fill="#9AA6BF"/>
 <circle cx="362" cy="84" r="10" fill="none" stroke="#7D89A3" stroke-width="3"/>
 <rect x="130" y="118" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="152.0" y="151.0" class="l">P</text>
-<rect x="182" y="118" width="44" height="44" rx="9" fill="#D9480F"/>
-<text x="204.0" y="151.0" class="l">A</text>
-<rect x="234" y="118" width="44" height="44" rx="9" fill="#D9480F"/>
-<text x="256.0" y="151.0" class="l">T</text>
-<rect x="286" y="118" width="44" height="44" rx="9" fill="#D9480F"/>
-<text x="308.0" y="151.0" class="l">O</text>
+<text x="152.0" y="151.0" class="l" fill="#fff">P</text>
+<rect x="182" y="118" width="44" height="44" rx="9" fill="#F59E0B"/>
+<text x="204.0" y="151.0" class="l" fill="#2B1700">A</text>
+<rect x="234" y="118" width="44" height="44" rx="9" fill="#F59E0B"/>
+<text x="256.0" y="151.0" class="l" fill="#2B1700">T</text>
+<rect x="286" y="118" width="44" height="44" rx="9" fill="#F59E0B"/>
+<text x="308.0" y="151.0" class="l" fill="#2B1700">O</text>
 <rect x="338" y="118" width="44" height="44" rx="9" fill="#B42318"/>
-<text x="360.0" y="151.0" class="l">S</text>
+<text x="360.0" y="151.0" class="l" fill="#fff">S</text>
 <rect x="130" y="170" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="152.0" y="203.0" class="l">P</text>
-<rect x="182" y="170" width="44" height="44" rx="9" fill="#D9480F"/>
-<text x="204.0" y="203.0" class="l">A</text>
-<rect x="234" y="170" width="44" height="44" rx="9" fill="#D9480F"/>
-<text x="256.0" y="203.0" class="l">R</text>
+<text x="152.0" y="203.0" class="l" fill="#fff">P</text>
+<rect x="182" y="170" width="44" height="44" rx="9" fill="#F59E0B"/>
+<text x="204.0" y="203.0" class="l" fill="#2B1700">A</text>
+<rect x="234" y="170" width="44" height="44" rx="9" fill="#F59E0B"/>
+<text x="256.0" y="203.0" class="l" fill="#2B1700">R</text>
 <rect x="286" y="170" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="308.0" y="203.0" class="l">T</text>
+<text x="308.0" y="203.0" class="l" fill="#fff">T</text>
 <rect x="338" y="170" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="360.0" y="203.0" class="l">O</text>
+<text x="360.0" y="203.0" class="l" fill="#fff">O</text>
 <rect x="130" y="222" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="152.0" y="255.0" class="l">P</text>
+<text x="152.0" y="255.0" class="l" fill="#fff">P</text>
 <rect x="182" y="222" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="204.0" y="255.0" class="l">R</text>
+<text x="204.0" y="255.0" class="l" fill="#fff">R</text>
 <rect x="234" y="222" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="256.0" y="255.0" class="l">A</text>
+<text x="256.0" y="255.0" class="l" fill="#fff">A</text>
 <rect x="286" y="222" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="308.0" y="255.0" class="l">T</text>
+<text x="308.0" y="255.0" class="l" fill="#fff">T</text>
 <rect x="338" y="222" width="44" height="44" rx="9" fill="#2457D6"/>
-<text x="360.0" y="255.0" class="l">O</text>
+<text x="360.0" y="255.0" class="l" fill="#fff">O</text>
 <rect x="132.5" y="290" width="22" height="31" rx="5" fill="#DDE3EE"/>
 <text x="143.5" y="311" class="k" fill="#232842">Q</text>
 <rect x="157.5" y="290" width="22" height="31" rx="5" fill="#DDE3EE"/>
